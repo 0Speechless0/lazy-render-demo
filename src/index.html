@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Orders Table</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      table-layout: fixed;
+    }
+
+    table thead {
+      position: sticky;
+      top: 0;
+      background: white;
+      z-index: 10;
+    }
+
+    .table-wrapper {
+      max-height: 800px;
+      overflow-y: auto;
+    }
+
+    .table-wrapper table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      /* 避免 column 跳動 */
+    }
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      word-wrap: break-word;
+    }
+
+    th {
+      background-color: #f4f4f4;
+      text-align: left;
+    }
+
+    tr:nth-child(even) {
+      background-color: #fafafa;
+    }
+
+    img.thumb {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h2>Orders Table</h2>
+  <div class="table-wrapper" id="scroll-container">
+    <table id="ordersTable" style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Order SN</th>
+          <th>Shop</th>
+          <th>Receipt Name</th>
+          <th>Address</th>
+          <th>Mail / Mobile</th>
+          <th>Region</th>
+          <th>Zip</th>
+          <th>Order Items</th>
+          <th>Times</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="inner-container">
+
+      </tbody>
+    </table>
+  </div>
+
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+
+    const visibleCount = 50;
+    let sectionIndex = 0;
+    let last_endIndex = 0;
+    let rendering = false;
+
+    async function loadOrders(count = 1) {
+
+      const order_list_json = await invoke("read_file", {});
+
+      // API URL 假設如下，帶 search_page_count
+
+      const data = JSON.parse(order_list_json).orders;
+      const itemHeight = 40;
+      const tbody = document.querySelector("#inner-container");
+      const scroll = document.querySelector("#scroll-container")
+
+      const render = (startIdx, plus = true) => {
+        let _data;
+        rendering = true;
+        if (!plus && tbody.childElementCount - visibleCount > 0) {
+          const topIdx = tbody.childElementCount - visibleCount;
+          for (let i = tbody.childElementCount - 1; i > topIdx; i--) {
+            tbody.removeChild(tbody.children[i]);
+          }
+          _data = data.slice(startIdx- visibleCount , startIdx ).reverse();
+        }
+        else {
+          _data = data.slice(startIdx, startIdx + visibleCount);
+        }
+
+
+        _data.forEach((order, i) => {
+          const address = `${order.address_line1} ${order.address_line2}`.trim();
+          const region = `${order.region_name1}, ${order.region_name2}, ${order.region_name3}`;
+
+          const itemsHtml = order.order_items.map(item => `
+          <div>
+            <img class="thumb" src="${item.thumb_url}" alt="thumb">
+            <div>${item.goods_name}</div>
+            <div>${item.spec}</div>
+            <div>Qty: ${item.quantity}</div>
+          </div>
+        `).join("");
+
+          const timesHtml = `
+          <div>Order: ${order.time_info.parent_order_time || "-"}</div>
+          <div>Pending Finish: ${order.time_info.parent_order_pending_finish_time || "-"}</div>
+          <div>Expected Ship: ${order.time_info.expect_ship_lastest_time || "-"}</div>
+          <div>Latest Delivery: ${order.time_info.latest_delivery_time || "-"}</div>
+        `;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+          <td> ${order.id}</td>
+          <td>${order.parent_order_sn}</td>
+          <td>${order.shop.name}</td>
+          <td>${order.receipt_name}</td>
+          <td>${address}</td>
+          <td>${order.mail} / ${order.mobile}</td>
+          <td>${region}</td>
+          <td>${order.zip}</td>
+          <td>${itemsHtml}</td>
+          <td>${timesHtml}</td>
+          <td>${order.status}</td>
+        `;
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.value = false;
+          checkbox.addEventListener('click', (e) => {
+            console.log("FF", e.target.checked, order.parent_order_sn)
+          })
+          let checkboxTd = document.createElement("td");
+          checkboxTd.appendChild(checkbox);
+
+          tr.appendChild(checkboxTd)
+
+
+          if (plus)
+            tbody.appendChild(tr)
+          else
+            tbody.prepend(tr)
+
+
+        });
+
+        if (plus && tbody.childElementCount > visibleCount * 2) {
+          console.log("remove front", tbody.childElementCount)
+          for (let i = 0; i < visibleCount; i++) {
+
+            tbody.removeChild(tbody.children[0]);
+          }
+        }
+        rendering = false;
+      }
+      // 滾動時重新渲染
+      scroll.addEventListener('scroll', debounce((e) => {
+        const scrollHeight = scroll.scrollHeight;
+        const lastScrollTop = scroll.scrollTop;
+        if (rendering)
+          return;
+        if (scroll.scrollTop === 0) {
+          console.log('已到頂部');
+          if (sectionIndex > 0) {
+            render((--sectionIndex) * visibleCount, false);
+            scroll.scrollTop = scroll.scrollHeight/2;
+          }
+
+        } else if (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight) {
+          console.log('已到底部');
+          if (sectionIndex < ((count - 1) / visibleCount) + 1) {
+            render((++sectionIndex) * visibleCount, true);
+            scroll.scrollTop = scroll.scrollHeight/2;
+          }
+
+        }
+        dataRender = false
+      }, 300))
+      render(0);
+    };
+
+
+    // 初次載入第一頁
+    loadOrders(500);
+    function debounce(fn, delay) {
+      let timer;
+      return function (...args) {
+        clearTimeout(timer);
+        timer = setTimeout(() => fn.apply(this, args), delay);
+      };
+    }
+
+  </script>
+
+</body>
+
+</html>
