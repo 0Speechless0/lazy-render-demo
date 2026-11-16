@@ -112,13 +112,15 @@
         rendering = true;
         if (!plus && tbody.childElementCount - visibleCount > 0) {
           const topIdx = tbody.childElementCount - visibleCount;
-          for (let i = tbody.childElementCount - 1; i > topIdx; i--) {
+          for (let i = tbody.childElementCount - 1; i >= topIdx; i--) {
             tbody.removeChild(tbody.children[i]);
           }
           _data = data.slice(startIdx- visibleCount , startIdx ).reverse();
+          console.log(startIdx - visibleCount, startIdx);
         }
         else {
           _data = data.slice(startIdx, startIdx + visibleCount);
+          console.log(startIdx, startIdx + visibleCount);
         }
 
 
@@ -176,7 +178,7 @@
         });
 
         if (plus && tbody.childElementCount > visibleCount * 2) {
-          console.log("remove front", tbody.childElementCount)
+          console.log("remove front")
           for (let i = 0; i < visibleCount; i++) {
 
             tbody.removeChild(tbody.children[0]);
@@ -192,7 +194,7 @@
           return;
         if (scroll.scrollTop === 0) {
           console.log('已到頂部');
-          if (sectionIndex > 0) {
+          if (sectionIndex > 1) {
             render((--sectionIndex) * visibleCount, false);
             scroll.scrollTop = scroll.scrollHeight/2;
           }
@@ -205,6 +207,7 @@
           }
 
         }
+        console.log("children .length", tbody.children.length);
         dataRender = false
       }, 300))
       render(0);
